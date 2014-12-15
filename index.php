@@ -62,7 +62,36 @@ class CSMemcached extends Memcached
         $this->lastok=true;
         $this->setuped=true;       
         $this->setOption(Memcached::OPT_CONNECT_TIMEOUT,100);
+        $this->setOption(Memcached::OPT_COMPRESSION,false);
     }   
+    public function prefixmulti($items)
+    {
+        $prefixitems=array();
+        foreach($items as $key=>$value)
+        {
+            $prefixitems[$this->prefix.$key]=$value;
+        }     
+        return $prefixitems;
+    }
+    public function prefixkeys($keys)
+    {
+        $prefixkeys=array();
+        foreach($keys as $key)
+        {
+            array_push($prefixkeys,$this->prefix.$key);
+        } 
+        return $prefixkeys;
+    }
+    public function deprefix($array)
+    {
+        $deprefix=array();
+        foreach($array as $key=>$value)
+        {
+            $pa=explode("/",$key,3);
+            $deprefix[$pa[1]]=$value;
+        }
+        return $deprefix;
+    }
     public function log()
     {
         $status="";
@@ -184,6 +213,128 @@ class CSMemcached extends Memcached
               }
                
     }
+    public function setMulti($items,$expirition=0)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="stm";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::setMulti($this->prefixmulti($items),$expirition);
+              $resultcode=parent::getResultCode();
+
+              if(($resultcode==0)and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $result;                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::setMulti($this->prefixmulti($items),$expirition);
+                   $resultcode=parent::getResultCode();
+                   if(($resultcode==0)and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $result;
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return false;
+              }
+               
+    }
+    public function replace($key,$value,$expirition=0)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="rep";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::replace($this->prefix.$key,$value,$expirition);
+              $resultcode=parent::getResultCode();
+
+              if((($resultcode==0)or($resultcode==14))and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $result;                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::replace($this->prefix.$key,$value,$expirition);
+                   $resultcode=parent::getResultCode();
+                   if(($resultcode==0)and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $result;
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return false;
+              }
+               
+    }
     public function get($key,$cache_cb=null,$cas_token=0)
     {
          if($this->fatalerror!=0)  return false;
@@ -194,6 +345,7 @@ class CSMemcached extends Memcached
          {
               $result=parent::get($this->prefix.$key,$cache_cb,0);
               $resultcode=parent::getResultCode();
+
               if((($resultcode==0)or($resultcode==16))and($result!==null))
               {
                   $this->proxystatus[$this->proxyindex]=0;
@@ -241,6 +393,67 @@ class CSMemcached extends Memcached
                    $this->lastok=false;
                    $this->log();
                    return false;
+              }
+               
+    }
+    public function getMulti($keys,$cas_token=0,$flags=0)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="gtm";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::getMulti($this->prefixkeys($keys),$cas_token,$flags);
+              $resultcode=parent::getResultCode();
+
+              if(($resultcode==0)and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $this->deprefix($result);                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::getMulti($this->prefixkeys($keys),$cas_token,$flags);
+                   $resultcode=parent::getResultCode();
+                   if(($resultcode==0)and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $this->deprefix($result);
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return $result;
               }
                
     }
@@ -365,37 +578,342 @@ class CSMemcached extends Memcached
               }
                
     }
+    public function append($key,$value)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="app";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::append($this->prefix.$key,$value);
+              $resultcode=parent::getResultCode();
+
+              if((($resultcode==0)or($resultcode==14))and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $result;                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::append($this->prefix.$key,$value);
+                   $resultcode=parent::getResultCode();
+                   if((($resultcode==0)or($resultcode==14))and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $result;
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return false;
+              }
+               
+    }
+    public function prepend($key,$value)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="pre";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::prepend($this->prefix.$key,$value);
+              $resultcode=parent::getResultCode();
+
+              if((($resultcode==0)or($resultcode==14))and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $result;                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::prepend($this->prefix.$key,$value);
+                   $resultcode=parent::getResultCode();
+                   if((($resultcode==0)or($resultcode==14))and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $result;
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return false;
+              }
+               
+    }
+    public function decrement($key,$offset=1,$initial_value=0,$expiry=0)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="dec";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::decrement($this->prefix.$key,$offset=1);//,$initial_value=0,$expiry=0);
+              $resultcode=parent::getResultCode();
+
+              if((($resultcode==0)or($resultcode==16))and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $result;                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::decrement($this->prefix.$key,$offset=1);//,$initial_value=0,$expiry=0);
+                   $resultcode=parent::getResultCode();
+                   if((($resultcode==0)or($resultcode==16))and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $result;
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return false;
+              }
+               
+    }
+    public function increment($key,$offset=1,$initial_value=0,$expiry=0)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="inc";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::increment($this->prefix.$key,$offset=1);//,$initial_value=0,$expiry=0);
+              $resultcode=parent::getResultCode();
+
+              if((($resultcode==0)or($resultcode==16))and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $result;                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::increment($this->prefix.$key,$offset=1);//,$initial_value=0,$expiry=0);
+                   $resultcode=parent::getResultCode();
+                   if((($resultcode==0)or($resultcode==16))and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $result;
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return false;
+              }
+               
+    }
+    public function touch($key,$expirition=0)
+    {
+         if($this->fatalerror!=0)  return false;
+         if($this->setuped==false) $this->setup();        
+         $this->reqmethod="tou";
+         
+         if($this->lastok==true)
+         {
+              $result=parent::touch($this->prefix.$key,$expirition);
+              $resultcode=parent::getResultCode();
+
+              if((($resultcode==0)or($resultcode==16))and($result!==null))
+              {
+                  $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
+                  return $result;                
+              }
+              else
+              {
+                  $this->proxystatus[$this->proxyindex]++;
+                  $this->proxystatus[$this->proxyindex]%=10000;
+                  $this->loopn=$this->proxyn-1;                
+              }
+         }
+         else
+         {
+              $this->loopn=$this->proxyn;
+         } 
+              $ok=false;
+              while($this->movetonextproxy())
+              {
+                   parent::resetServerList();
+                   parent::addServer($this->proxyip,$this->proxyport);
+                   $result=parent::touch($this->prefix.$key,$expirition);
+                   $resultcode=parent::getResultCode();
+                   if((($resultcode==0)or($resultcode==16))and($result!==null))
+                   {
+                       $ok=true;
+                       $this->proxystatus[$this->proxyindex]=0;
+                       break;
+                   }                  
+                   else
+                   {
+                        $this->proxystatus[$this->proxyindex]++;
+                        $this->proxystatus[$this->proxyindex]%=10000; 
+                   }                
+              }
+              if($ok==true)
+              {
+                   $this->lastok=true;
+                   $this->log();
+                   return $result;
+              }
+              else
+              {
+                   $this->lastok=false;
+                   $this->log();
+                   return false;
+              }
+               
+    }
 }
 
 
 $csm=new CSMemcached("0001");
 $csm->showproxyarray();
 echo "1111111"."<br>";
-var_dump($csm->delete("ayya",0))."<br>";
+var_dump($csm->setMulti(array("a"=>111,"b"=>222,"c"=>333)))."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "22222","<br>";
-var_dump($csm->add("addua",null,0))."<br>";
+var_dump($csm->getMulti(array("a","b","c")));
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "33333"."<br>";
-var_dump($csm->set("foo2",8888))."<br>";
+var_dump($csm->get("b"))."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "44444"."<br>";
-var_dump($csm->get("foo2"))."<br>";
+var_dump($csm->get("c"))."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "55555"."<br>";
-var_dump($csm->set("foo2",8888))."<br>";
+var_dump($csm->get("foo2"))."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
@@ -407,7 +925,7 @@ echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "begin loop"."<br>";
-for($i=0;$i<40;$i++)
+for($i=0;$i<0;$i++)
 {
     $csm->set("foo3",9999);
     sleep(1);
