@@ -17,11 +17,13 @@ class CSMemcached extends Memcached
     private $haveadd;
     private $setuped;
     private $loopn;
+    private $logf;    // file handler
+    private $reqmethod;
     public function CSMemcached($prefix)
     {
         $this->prefix=$prefix."/";
         
-        $proxystr='["127.0.0.1:9001","129.1.1.1:9001","127.0.0.1:9001"]';
+        $proxystr='["127.0.0.1:8001","127.1.1.1:8002","127.0.0.1:8003"]';
         $this->proxyarray=json_decode($proxystr);
         $this->proxyn=count($this->proxyarray);
         if($this->proxyn>=1)
@@ -42,6 +44,10 @@ class CSMemcached extends Memcached
         $this->haveadd=false;
         $this->setuped=false;
         if($this->proxyn<1) $this->fatalerror=1;
+        if(($this->logf=fopen("/root/myweb/log.txt","w"))===null)
+        {
+             $this->fatalerror=2;
+        }
         parent::__construct();
     }
     public function setup()
@@ -57,6 +63,14 @@ class CSMemcached extends Memcached
         $this->setuped=true;       
         $this->setOption(Memcached::OPT_CONNECT_TIMEOUT,100);
     }   
+    public function log()
+    {
+        $status="";
+        if($this->lastok==true) $status="success";
+        else                    $status="failure";
+        $message=date("H:i:s: ").time()." ".$this->reqmethod." ".$status." ".$this->proxyip." ".$this->proxyport."\n";
+        fwrite($this->logf,$message);
+    }
     public function movetonextproxy()
     {
         $this->loopn--;
@@ -113,6 +127,7 @@ class CSMemcached extends Memcached
     {
          if($this->fatalerror!=0)  return false;
          if($this->setuped==false) $this->setup();        
+         $this->reqmethod="set";
          
          if($this->lastok==true)
          {
@@ -122,6 +137,7 @@ class CSMemcached extends Memcached
               if(($resultcode==0)and($result!==null))
               {
                   $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
                   return $result;                
               }
               else
@@ -157,11 +173,13 @@ class CSMemcached extends Memcached
               if($ok==true)
               {
                    $this->lastok=true;
+                   $this->log();
                    return $result;
               }
               else
               {
                    $this->lastok=false;
+                   $this->log();
                    return false;
               }
                
@@ -170,6 +188,7 @@ class CSMemcached extends Memcached
     {
          if($this->fatalerror!=0)  return false;
          if($this->setuped==false) $this->setup();        
+         $this->reqmethod="get";
          
          if($this->lastok==true)
          {
@@ -178,6 +197,7 @@ class CSMemcached extends Memcached
               if((($resultcode==0)or($resultcode==16))and($result!==null))
               {
                   $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
                   return $result;                
               }
               else
@@ -213,11 +233,13 @@ class CSMemcached extends Memcached
               if($ok==true)
               {
                    $this->lastok=true;
+                   $this->log();
                    return $result;
               }
               else
               {
                    $this->lastok=false;
+                   $this->log();
                    return false;
               }
                
@@ -226,6 +248,7 @@ class CSMemcached extends Memcached
     {
          if($this->fatalerror!=0)  return false;
          if($this->setuped==false) $this->setup();        
+         $this->reqmethod="add";
          
          if($this->lastok==true)
          {
@@ -235,6 +258,7 @@ class CSMemcached extends Memcached
               if((($resultcode==0)or($resultcode==14))and($result!==null))
               {
                   $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
                   return $result;                
               }
               else
@@ -270,11 +294,13 @@ class CSMemcached extends Memcached
               if($ok==true)
               {
                    $this->lastok=true;
+                   $this->log();
                    return $result;
               }
               else
               {
                    $this->lastok=false;
+                   $this->log();
                    return false;
               }
                
@@ -283,6 +309,7 @@ class CSMemcached extends Memcached
     {
          if($this->fatalerror!=0)  return false;
          if($this->setuped==false) $this->setup();        
+         $this->reqmethod="del";
          
          if($this->lastok==true)
          {
@@ -291,6 +318,7 @@ class CSMemcached extends Memcached
               if((($resultcode==0)or($resultcode==16))and($result!==null))
               {
                   $this->proxystatus[$this->proxyindex]=0;
+                  $this->log();
                   return $result;                
               }
               else
@@ -326,11 +354,13 @@ class CSMemcached extends Memcached
               if($ok==true)
               {
                    $this->lastok=true;
+                   $this->log();
                    return $result;
               }
               else
               {
                    $this->lastok=false;
+                   $this->log();
                    return false;
               }
                
@@ -376,7 +406,12 @@ $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
-
+echo "begin loop"."<br>";
+for($i=0;$i<40;$i++)
+{
+    $csm->set("foo3",9999);
+    sleep(1);
+}
 
 $csm->showservers();
 
