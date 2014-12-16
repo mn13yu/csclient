@@ -23,7 +23,17 @@ class CSMemcached extends Memcached
     {
         $this->prefix=$prefix."/";
         
-        $proxystr='["127.0.0.1:8001","127.1.1.1:8002","127.0.0.1:8003"]';
+        $page=file_get_contents("http://127.0.0.1:4001/v2/keys/proxy");
+        if($page===false)
+        {
+            $this->fatalerror=2;
+            $proxystr='[]';
+        }       
+        else
+        {
+            $obj=json_decode($page);
+            $proxystr=$obj->node->value;
+        }
         $this->proxyarray=json_decode($proxystr);
         $this->proxyn=count($this->proxyarray);
         if($this->proxyn>=1)
@@ -209,7 +219,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -270,7 +280,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -331,7 +341,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -392,7 +402,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -514,7 +524,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -574,7 +584,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -635,7 +645,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -696,7 +706,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -757,7 +767,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -818,7 +828,7 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
@@ -879,13 +889,13 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=false;
                    $this->log();
-                   return false;
+                   return $result;
               }
                
     }
 }
 
-
+/*
 $csm=new CSMemcached("0001");
 $csm->showproxyarray();
 echo "1111111"."<br>";
@@ -932,7 +942,7 @@ for($i=0;$i<0;$i++)
 }
 
 $csm->showservers();
-
+*/
 ?>
 
 
