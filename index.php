@@ -345,7 +345,7 @@ class CSMemcached extends Memcached
               }
                
     }
-    public function get($key,$cache_cb=null,$cas_token=0)
+    public function get($key,$cache_cb=null,&$cas_token=null)
     {
          if($this->fatalerror!=0)  return false;
          if($this->setuped==false) $this->setup();        
@@ -353,7 +353,7 @@ class CSMemcached extends Memcached
          
          if($this->lastok==true)
          {
-              $result=parent::get($this->prefix.$key,$cache_cb,0);
+              $result=parent::get($this->prefix.$key,$cache_cb,$cas_token);
               $resultcode=parent::getResultCode();
 
               if((($resultcode==0)or($resultcode==16))and($result!==null))
@@ -378,7 +378,7 @@ class CSMemcached extends Memcached
               {
                    parent::resetServerList();
                    parent::addServer($this->proxyip,$this->proxyport);
-                   $result=parent::get($this->prefix.$key,$cache_cb,0);
+                   $result=parent::get($this->prefix.$key,$cache_cb,$cas_token);
                    $resultcode=parent::getResultCode();
                    if((($resultcode==0)or($resultcode==16))and($result!==null))
                    {
@@ -406,12 +406,12 @@ class CSMemcached extends Memcached
               }
                
     }
-    public function getMulti($keys,$cas_token=0,$flags=0)
+    public function getMulti($keys,&$cas_token=null,$flags=0)
     {
          if($this->fatalerror!=0)  return false;
          if($this->setuped==false) $this->setup();        
          $this->reqmethod="gtm";
-         
+
          if($this->lastok==true)
          {
               $result=parent::getMulti($this->prefixkeys($keys),$cas_token,$flags);
@@ -421,6 +421,8 @@ class CSMemcached extends Memcached
               {
                   $this->proxystatus[$this->proxyindex]=0;
                   $this->log();
+                  if(count($cas_token)==0) {}
+                  else $cas_token=$this->deprefix($cas_token);
                   return $this->deprefix($result);                
               }
               else
@@ -457,6 +459,8 @@ class CSMemcached extends Memcached
               {
                    $this->lastok=true;
                    $this->log();
+                   if(count($cas_token)==0) {}
+                   else $cas_token=$this->deprefix($cas_token);
                    return $this->deprefix($result);
               }
               else
@@ -895,41 +899,48 @@ class CSMemcached extends Memcached
     }
 }
 
-/*
 $csm=new CSMemcached("0001");
 $csm->showproxyarray();
 echo "1111111"."<br>";
 var_dump($csm->setMulti(array("a"=>111,"b"=>222,"c"=>333)))."<br>";
+echo $csm->getResultCode()."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "22222","<br>";
-var_dump($csm->getMulti(array("a","b","c")));
+$tokens=array();
+var_dump($csm->getMulti(array("a","b","c"),$tokens));
+echo $csm->getResultCode()."<br>";
+var_dump($tokens);
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "33333"."<br>";
-var_dump($csm->get("b"))."<br>";
+var_dump($csm->get("b",null,$token))."<br>";
+echo $csm->getResultCode()."<br>".$token;
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "44444"."<br>";
 var_dump($csm->get("c"))."<br>";
+echo $csm->getResultCode()."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "55555"."<br>";
 var_dump($csm->get("foo2"))."<br>";
+echo $csm->getResultCode()."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
 
 echo "66666"."<br>";
 var_dump($csm->set("foo2",8888))."<br>";
+echo $csm->getResultCode()."<br>";
 $csm->showproxyarray();
 echo $csm->getResultMessage()."<br>";
 echo "<br>";
@@ -942,7 +953,6 @@ for($i=0;$i<0;$i++)
 }
 
 $csm->showservers();
-*/
 ?>
 
 
