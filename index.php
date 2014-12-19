@@ -19,17 +19,27 @@ class Sinamcp extends Memcached
     private $loopn;
     private $logf;    // file handler
     private $reqmethod;
-    private $proxycachepath;
-    private $proxycachename;
-    private $eliminatetime;
+    public $proxycachepath;
+    public $proxycachename;
+    public $eliminatetime;
     public $updateproxy;
-    public function Sinamcp($prefix)
+    public function Sinamcp($prefix,$path="/tmp/sina/proxycache.txt",$eliminatetime=100)
     {
         $this->prefix=$prefix."/";
-        $this->proxycachepath="/root/myweb/";
-        $this->proxycachename="proxycache.txt";
-        $this->eliminatetime=50;
-        
+        $pathinfo=pathinfo($path);
+        if(($pathinfo['dirname']==".")or($pathinfo['dirname']==""))
+        {
+            $this->proxycachepath=getcwd()."/";
+        }
+        elseif($pathinfo['dirname']=="/")
+        {
+            $this->proxycachepath="/";
+        }
+        else
+        {
+            $this->proxycachepath=$pathinfo['dirname']."/";
+        }
+        $this->proxycachename=$pathinfo['basename'];
         if(file_exists($this->proxycachepath.$this->proxycachename))
         {
               
@@ -71,11 +81,12 @@ class Sinamcp extends Memcached
              $handle=fopen($this->proxycachepath.$this->proxycachename,"w");
              if($handle===false)
              {
-                echo "can not open file:".$this->proxycachepath.$this->proxycachename.".check your permission.<br>";
+                echo "can not open file:".$this->proxycachepath.$this->proxycachename." .check your permission.<br>";
                 exit;
              }
              fwrite($handle,$proxystr);
              fclose($handle);
+             clearstatcache();
         }
         else
         {
