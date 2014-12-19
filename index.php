@@ -3,7 +3,7 @@
 <?php
 
 
-class CSMemcached extends Memcached 
+class Sinamcp extends Memcached 
 {
     private $fatalerror;
     private $prefix;
@@ -19,20 +19,73 @@ class CSMemcached extends Memcached
     private $loopn;
     private $logf;    // file handler
     private $reqmethod;
-    public function CSMemcached($prefix)
+    private $proxycachepath;
+    private $proxycachename;
+    private $eliminatetime;
+    public $updateproxy;
+    public function Sinamcp($prefix)
     {
         $this->prefix=$prefix."/";
+        $this->proxycachepath="/root/myweb/";
+        $this->proxycachename="proxycache.txt";
+        $this->eliminatetime=50;
         
-        $page=file_get_contents("http://127.0.0.1:4001/v2/keys/proxy");
-        if($page===false)
+        if(file_exists($this->proxycachepath.$this->proxycachename))
         {
-            $this->fatalerror=2;
-            $proxystr='[]';
-        }       
+              
+              if((time()-filemtime($this->proxycachepath.$this->proxycachename))<$this->eliminatetime)
+              {
+                   $this->updateproxy=false;
+              } 
+              else
+              {
+                   $this->updateproxy=true;
+              }
+        }      
         else
         {
-            $obj=json_decode($page);
-            $proxystr=$obj->node->value;
+             if(!file_exists($this->proxycachepath))
+             {
+                 if(!mkdir($this->proxycachepath,0777))
+                 {
+                     echo "con not creat path:".$this->proxycachepalth."check your permission<br>";
+                     exit;
+                 }
+             }
+             $this->updateproxy=true;
+        }
+        
+        if($this->updateproxy==true)
+        {
+             $page=file_get_contents("http://127.0.0.1:4001/v2/keys/proxy");
+             if($page===false)
+             {
+                  $this->fatalerror=2;
+                  $proxystr='[]';
+             }
+             else
+             {
+                  $obj=json_decode($page);
+                  $proxystr=$obj->node->value;
+             }
+             $handle=fopen($this->proxycachepath.$this->proxycachename,"w");
+             if($handle===false)
+             {
+                echo "can not open file:".$this->proxycachepath.$this->proxycachename.".check your permission.<br>";
+                exit;
+             }
+             fwrite($handle,$proxystr);
+             fclose($handle);
+        }
+        else
+        {
+             $handle=fopen($this->proxycachepath.$this->proxycachename,"r");
+             if($handle===false)
+             {
+                echo "can not open file:".$this->proxycachepath.$this->proxycachename.".check your permission.<br>";
+             }
+             $proxystr=fread($handle,1000000);
+             fclose($handle);
         }
         $this->proxyarray=json_decode($proxystr);
         $this->proxyn=count($this->proxyarray);
@@ -54,7 +107,8 @@ class CSMemcached extends Memcached
         $this->haveadd=false;
         $this->setuped=false;
         if($this->proxyn<1) $this->fatalerror=1;
-        if(($this->logf=fopen("/root/myweb/log.txt","w"))===null)
+
+        if(($this->logf=fopen("log.txt","a"))===null)
         {
              $this->fatalerror=2;
         }
@@ -62,10 +116,11 @@ class CSMemcached extends Memcached
     }
     public function setup()
     {
-        $pa=explode(":",$this->proxyarray[0],3);
+        $randomindex=rand(0,$this->proxyn-1);
+        $pa=explode(":",$this->proxyarray[$randomindex],3);
         $this->proxyip=$pa[0];
         $this->proxyport=$pa[1];
-        $this->proxyindex=0;
+        $this->proxyindex=$randomindex;
 
         parent::addServer($this->proxyip,$this->proxyport);
         $this->haveadd=true;
@@ -898,61 +953,6 @@ class CSMemcached extends Memcached
                
     }
 }
-
-$csm=new CSMemcached("0001");
-$csm->showproxyarray();
-echo "1111111"."<br>";
-var_dump($csm->setMulti(array("a"=>111,"b"=>222,"c"=>333)))."<br>";
-echo $csm->getResultCode()."<br>";
-$csm->showproxyarray();
-echo $csm->getResultMessage()."<br>";
-echo "<br>";
-
-echo "22222","<br>";
-$tokens=array();
-var_dump($csm->getMulti(array("a","b","c"),$tokens));
-echo $csm->getResultCode()."<br>";
-var_dump($tokens);
-$csm->showproxyarray();
-echo $csm->getResultMessage()."<br>";
-echo "<br>";
-
-echo "33333"."<br>";
-var_dump($csm->get("b",null,$token))."<br>";
-echo $csm->getResultCode()."<br>".$token;
-$csm->showproxyarray();
-echo $csm->getResultMessage()."<br>";
-echo "<br>";
-
-echo "44444"."<br>";
-var_dump($csm->get("c"))."<br>";
-echo $csm->getResultCode()."<br>";
-$csm->showproxyarray();
-echo $csm->getResultMessage()."<br>";
-echo "<br>";
-
-echo "55555"."<br>";
-var_dump($csm->get("foo2"))."<br>";
-echo $csm->getResultCode()."<br>";
-$csm->showproxyarray();
-echo $csm->getResultMessage()."<br>";
-echo "<br>";
-
-echo "66666"."<br>";
-var_dump($csm->set("foo2",8888))."<br>";
-echo $csm->getResultCode()."<br>";
-$csm->showproxyarray();
-echo $csm->getResultMessage()."<br>";
-echo "<br>";
-
-echo "begin loop"."<br>";
-for($i=0;$i<0;$i++)
-{
-    $csm->set("foo3",9999);
-    sleep(1);
-}
-
-$csm->showservers();
 ?>
 
 
