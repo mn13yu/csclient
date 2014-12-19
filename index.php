@@ -28,19 +28,51 @@ class Sinamcp extends Memcached
         $this->prefix=$prefix."/";
         $this->proxycachepath="/root/myweb/";
         $this->proxycachename="proxycache.txt";
-        $this->eliminatetime=50;
-        
+        $this->eliminatetime=5;
+        $filename=$this->proxycachepath.$this->proxycachename;
+        $handle=false;
+        $this->updateproxy=true;
         if(file_exists($this->proxycachepath.$this->proxycachename))
         {
-              
-              if((time()-filemtime($this->proxycachepath.$this->proxycachename))<$this->eliminatetime)
+              if(!($handle=fopen($filename,"r+")))
               {
-                   $this->updateproxy=false;
-              } 
-              else
-              {
-                   $this->updateproxy=true;
+                  echo "can not open file:".$filename." check your permission.<br>";
+                  exit;
               }
+              $str=fread($handle,100000);
+              $obj=json_decode($str);
+              if(($obj!=false)and($obj!=null))
+              {
+                   $updatetime=$obj->updatetime;
+                   $ipstr=$obj->ipstr;
+                   if((time()-$updatetime)<$this->eliminatetime)
+                   {
+                        $proxystr=$ipstr;
+                        $this->updateproxy=false;                       
+                   }                  
+              }              
+              if($this->updateproxy==true)
+              {
+                   $page=file_get_contents("http://127.0.0.1:4001/v2/keys/proxy");
+                   if($page===false)
+                   {
+                        $this->fatalerror=2;
+                        $proxystr='[]';
+                    }
+                    else
+                    {
+                        $obj=json_decode($page);
+                        $proxystr=$obj->node->value;
+                    }
+                    fseek($handle,0);
+                    $tarry=array("updatetime"=>time(),"ipstr"=>$proxystr);
+                    $str=json_encode($tarry);
+                    if($str!=false)
+                    {
+                       fwrite($handle,$str);
+                    }
+              }
+              fclose($handle);
         }      
         else
         {
@@ -53,12 +85,14 @@ class Sinamcp extends Memcached
                  }
              }
              $this->updateproxy=true;
-        }
-        
-        if($this->updateproxy==true)
-        {
-             $page=file_get_contents("http://127.0.0.1:4001/v2/keys/proxy");
-             if($page===false)
+             $handle=fopen($filename,"w");
+             if($handle===false)
+             {
+                 echo "can not open file:".$filename." check your permission.<br>";
+                 exit;
+              }
+             $page=file_get_contents("http://127.0.0.1:4001/v2/keys/proxy"); 
+             if($page===false) 
              {
                   $this->fatalerror=2;
                   $proxystr='[]';
@@ -68,25 +102,15 @@ class Sinamcp extends Memcached
                   $obj=json_decode($page);
                   $proxystr=$obj->node->value;
              }
-             $handle=fopen($this->proxycachepath.$this->proxycachename,"w");
-             if($handle===false)
+             $tarry=array("updatetime"=>time(),"ipstr"=>$proxystr);
+             $str=json_encode($tarry);
+             if($str!=false)
              {
-                echo "can not open file:".$this->proxycachepath.$this->proxycachename.".check your permission.<br>";
-                exit;
+                   fwrite($handle,$str);
              }
-             fwrite($handle,$proxystr);
              fclose($handle);
         }
-        else
-        {
-             $handle=fopen($this->proxycachepath.$this->proxycachename,"r");
-             if($handle===false)
-             {
-                echo "can not open file:".$this->proxycachepath.$this->proxycachename.".check your permission.<br>";
-             }
-             $proxystr=fread($handle,1000000);
-             fclose($handle);
-        }
+        
         $this->proxyarray=json_decode($proxystr);
         $this->proxyn=count($this->proxyarray);
         if($this->proxyn>=1)
